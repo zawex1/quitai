@@ -1,0 +1,13 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+body {
+  @apply bg-quit-bg text-slate-100 antialiased;
+  font-size: 18px;
+  line-height: 1.6;
+}
