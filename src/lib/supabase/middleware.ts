@@ -1,6 +1,13 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
+/** Аргумент `setAll` из cookie-адаптера @supabase/ssr (строгий TS на Vercel). */
+type CookieToSet = {
+  name: string;
+  value: string;
+  options?: NonNullable<Parameters<NextResponse["cookies"]["set"]>[2]>;
+};
+
 /**
  * Обновляет сессию Supabase по запросу (нужно вызывать из корневого middleware.ts).
  */
@@ -18,7 +25,7 @@ export async function updateSession(request: NextRequest) {
       getAll() {
         return request.cookies.getAll();
       },
-      setAll(cookiesToSet) {
+      setAll(cookiesToSet: CookieToSet[]) {
         cookiesToSet.forEach(({ name, value }) => {
           request.cookies.set(name, value);
         });
