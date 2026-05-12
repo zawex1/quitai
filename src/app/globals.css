@@ -10,4 +10,15 @@ body {
   @apply bg-quit-bg text-slate-100 antialiased;
   font-size: 18px;
   line-height: 1.6;
+  /* Без next/font: избегаем OTS «Failed to convert WOFF 2.0» при битом/прерванном WOFF2 */
+  font-family:
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    Roboto,
+    "Helvetica Neue",
+    Arial,
+    "Noto Sans",
+    "Liberation Sans",
+    sans-serif;
 }
