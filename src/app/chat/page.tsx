@@ -14,7 +14,22 @@ function ChatInner() {
   const ob = useMemo(() => loadOnboarding(), []);
   const mentor = ob ? getMentorById(ob.mentorId) : undefined;
 
-  if (!ob) return null;
+  if (!ob) {
+    return (
+      <main className="mx-auto flex min-h-[50vh] max-w-lg flex-col justify-center gap-4 px-4 py-12 text-center">
+        <h1 className="text-xl font-semibold text-slate-100">Чат пока недоступен</h1>
+        <p className="text-slate-400">
+          Сначала нужно пройти короткую настройку (зависимость и наставник). Так мы сохраним данные в браузере.
+        </p>
+        <Link
+          href="/onboarding"
+          className="mx-auto rounded-2xl bg-quit-accent px-6 py-3 font-semibold text-slate-950 hover:brightness-110"
+        >
+          Перейти к настройке
+        </Link>
+      </main>
+    );
+  }
 
   return (
     <main className="mx-auto min-h-screen max-w-3xl px-4 py-6 sm:px-6">

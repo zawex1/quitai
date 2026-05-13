@@ -2,9 +2,11 @@ import { NextResponse } from "next/server";
 import OpenAI from "openai";
 import { getMentorById } from "@/config/mentors";
 import type { MentorId } from "@/types/app";
-import { fetchGigaChatAccessToken, gigachatCompletion } from "@/lib/gigachat";
+import { runGigaChatChat } from "@/lib/gigachat";
 
 export const runtime = "nodejs";
+/** Лимит времени функции (сек). На бесплатном Vercel фактический максимум может быть ~10. */
+export const maxDuration = 60;
 
 const DEEPSEEK_BASE_URL = "https://api.deepseek.com";
 const DEEPSEEK_MODEL = "deepseek-chat";
@@ -39,16 +41,7 @@ async function deepSeekChat(system: string, messages: ChatBody["messages"]) {
 }
 
 async function gigaChat(system: string, messages: ChatBody["messages"]) {
-  const id = process.env.GIGACHAT_CLIENT_ID;
-  const secret = process.env.GIGACHAT_CLIENT_SECRET;
-  if (!id || !secret) return null;
-
-  const token = await fetchGigaChatAccessToken(id, secret);
-  const payload = [
-    { role: "system", content: system },
-    ...messages.map((m) => ({ role: m.role, content: m.content })),
-  ];
-  return gigachatCompletion(token, payload);
+  return runGigaChatChat(system, messages);
 }
 
 export async function POST(req: Request) {
@@ -69,7 +62,42 @@ export async function POST(req: Request) {
   const messages = body.messages.filter((m) => m.role !== "system");
 
   try {
-    let reply: string | null = await deepSeekChat(system, messages);
+    let reply: string | null = null;
+    const hasDeepSeekKey = Boolean(process.env.DEEPSEEK_API_KEY);
+
+    if (hasDeepSeekKey) {
+      try {
+        reply = await deepSeekChat(system, messages);
+      } catch (err) {
+        if (err instanceof OpenAI.APIError && err.status === 402) {
+          console.warn("[api/chat] DeepSeek 402 (нет средств), пробуем GigaChat");
+          try {
+            reply = await gigaChat(system, messages);
+            if (!reply) {
+              return NextResponse.json(
+                {
+                  error:
+                    "На балансе DeepSeek закончились средства. Добавьте GIGACHAT_CLIENT_ID и GIGACHAT_CLIENT_SECRET в Vercel (или пополните баланс DeepSeek).",
+                },
+                { status: 402 }
+              );
+            }
+          } catch (gErr) {
+            console.error("[api/chat] GigaChat после 402:", gErr);
+            return NextResponse.json(
+              {
+                error:
+                  "На балансе DeepSeek закончились средства. Запасной GigaChat не сработал — пополните баланс DeepSeek или настройте GIGACHAT_CLIENT_ID и GIGACHAT_CLIENT_SECRET в переменных окружения.",
+              },
+              { status: 402 }
+            );
+          }
+        } else {
+          throw err;
+        }
+      }
+    }
+
     if (!reply) {
       reply = await gigaChat(system, messages);
     }
@@ -114,11 +142,17 @@ export async function POST(req: Request) {
       );
     }
 
+    const detail =
+      error instanceof Error ? error.message : typeof error === "string" ? error : "Неизвестная ошибка";
+    const hint =
+      /certificate|CERT|TLS|SSL|UNABLE_TO_VERIFY|self signed|unknown ca/i.test(detail)
+        ? " Для GigaChat в Node.js часто нужен корневой сертификат Минцифры — см. раздел про сертификаты в документации GigaChat на developers.sber.ru."
+        : "";
     return NextResponse.json(
       {
-        error: "Не удалось получить ответ. Проверьте соединение и попробуйте снова чуть позже.",
+        error: `${detail.slice(0, 600)}${hint}`,
       },
-      { status: 500 }
+      { status: 502 }
     );
   }
 }

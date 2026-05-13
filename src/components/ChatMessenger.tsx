@@ -43,16 +43,37 @@ export function ChatMessenger({ mentorId, crisisBoot }: ChatMessengerProps) {
       setError(null);
       setLoading(true);
       try {
-        const res = await fetch("/api/chat", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            mentorId,
-            messages: history.map((m) => ({ role: m.role, content: m.content })),
-          }),
-        });
-        const data = (await res.json()) as { reply?: string; error?: string };
-        if (!res.ok) throw new Error(data.error ?? "Ошибка сети");
+        let res: Response;
+        try {
+          res = await fetch("/api/chat", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            cache: "no-store",
+            body: JSON.stringify({
+              mentorId,
+              messages: history.map((m) => ({ role: m.role, content: m.content })),
+            }),
+          });
+        } catch (netErr) {
+          const cause =
+            netErr instanceof Error && "cause" in netErr && netErr.cause instanceof Error
+              ? netErr.cause.message
+              : "";
+          const base = netErr instanceof Error ? netErr.message : "Сеть";
+          throw new Error(
+            `${base}${cause ? ` (${cause})` : ""}. Проверьте интернет; на бесплатном Vercel длинные ответы иногда обрываются — попробуйте ещё раз или короче текст.`
+          );
+        }
+
+        const raw = await res.text();
+        let data: { reply?: string; error?: string };
+        try {
+          data = JSON.parse(raw) as { reply?: string; error?: string };
+        } catch {
+          throw new Error(`Ответ сервера не JSON (${res.status}). ${raw.slice(0, 200)}`);
+        }
+
+        if (!res.ok) throw new Error(data.error ?? `Ошибка ${res.status}`);
         const assistant: ChatMessage = { role: "assistant", content: data.reply ?? "" };
         setMessages([...history, assistant]);
       } catch (e) {
